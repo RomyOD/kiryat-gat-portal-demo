@@ -1,7 +1,7 @@
 // שרת ניהול משתמשים (Vercel Serverless Function)
 // המפתח הסודי של Supabase שמור רק כאן, כמשתנה סביבה ב-Vercel, ולעולם אינו נשלח לדפדפן.
-const URL_ = process.env.SUPABASE_URL;
-const SECRET = process.env.SUPABASE_SECRET_KEY;
+const URL_ = (process.env.SUPABASE_URL || '').trim().replace(/\/+(rest\/v1\/?)?$/, '');
+const SECRET = (process.env.SUPABASE_SECRET_KEY || '').replace(/\s+/g, '');
 const DOMAIN = process.env.EMAIL_DOMAIN || 'demo.romy.co.il';
 const ROLES = ['admin', 'treasurer', 'wing', 'dept', 'viewer'];
 
@@ -24,7 +24,7 @@ async function caller(req) {
   const auth = req.headers.authorization || '';
   if (!auth.startsWith('Bearer ')) return null;
   let r;
-  try { r = await fetch(`${URL_}/auth/v1/user`, { headers: { apikey: SECRET, Authorization: auth } }); } catch (e) { console.error('auth check failed', e.message); throw e; }
+  try { r = await fetch(`${URL_}/auth/v1/user`, { headers: { apikey: SECRET, Authorization: auth } }); } catch (e) { console.error('auth check failed'); throw e; }
   if (!r.ok) return null;
   const user = await r.json();
   const prof = await sb(`/rest/v1/profiles?id=eq.${user.id}&select=*`);
@@ -56,10 +56,10 @@ export default async function handler(req, res) {
       url_ok: /^https:\/\/[a-z0-9]+\.supabase\.co$/.test(URL_),
       url_shape: URL_.replace(/[a-z0-9]{6,}(?=\.supabase)/, '****').slice(0, 60),
       key_type: SECRET.startsWith('sb_secret_') ? 'secret' : SECRET.startsWith('sb_publishable_') ? 'publishable (wrong key)' : SECRET.startsWith('eyJ') ? 'legacy jwt' : 'unknown',
-      key_has_whitespace: /\s/.test(SECRET),
+      key_had_whitespace: /\s/.test(process.env.SUPABASE_SECRET_KEY || ''),
     };
-    try { const d = await sb('/rest/v1/divisions?select=id&limit=1'); out.db = Array.isArray(d) ? 'ok' : 'unexpected'; } catch (e) { out.db = `fail ${e.status || ''} ${String(e.message).slice(0, 80)}`; }
-    try { await sb('/auth/v1/admin/users?per_page=1'); out.auth_admin = 'ok'; } catch (e) { out.auth_admin = `fail ${e.status || ''} ${String(e.message).slice(0, 80)}`; }
+    try { const d = await sb('/rest/v1/divisions?select=id&limit=1'); out.db = Array.isArray(d) ? 'ok' : 'unexpected'; } catch (e) { out.db = `fail ${e.status || 'network'}`; }
+    try { await sb('/auth/v1/admin/users?per_page=1'); out.auth_admin = 'ok'; } catch (e) { out.auth_admin = `fail ${e.status || 'network'}`; }
     return res.json(out);
   }
   try {
@@ -120,7 +120,7 @@ export default async function handler(req, res) {
 
     return res.status(400).json({ error: 'פעולה לא מוכרת' });
   } catch (e) {
-    console.error('users api error', e.status, e.message, e.stack);
+    console.error('users api error', e.status || 'network', String(e.message || '').replace(/sb_secret_\S+|eyJ\S+/g, '[redacted]').slice(0, 200));
     return res.status(e.status && e.status < 500 ? e.status : 500).json({ error: e.status === 400 ? e.message : 'שגיאה בשרת הניהול. נסה שוב' });
   }
 }
