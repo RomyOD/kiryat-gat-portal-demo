@@ -38,10 +38,10 @@ function audit(by, rowId, action, changes) {
 
 function clean(p) {
   const role = ROLES.includes(p.role) ? p.role : null;
-  if (!role) throw Object.assign(new Error('תפקיד לא תקין'), { status: 400 });
+  if (!role) throw Object.assign(new Error('תפקיד לא תקין'), { status: 400, expose: true });
   const out = { role, full_name: String(p.full_name || '').trim().slice(0, 80), active: !!p.active, division_id: null, department_id: null };
-  if (role === 'wing') { out.division_id = Number(p.division_id) || null; if (!out.division_id) throw Object.assign(new Error('יש לבחור אגף'), { status: 400 }); }
-  if (role === 'dept') { out.department_id = Number(p.department_id) || null; if (!out.department_id) throw Object.assign(new Error('יש לבחור מחלקה'), { status: 400 }); }
+  if (role === 'wing') { out.division_id = Number(p.division_id) || null; if (!out.division_id) throw Object.assign(new Error('יש לבחור אגף'), { status: 400, expose: true }); }
+  if (role === 'dept') { out.department_id = Number(p.department_id) || null; if (!out.department_id) throw Object.assign(new Error('יש לבחור מחלקה'), { status: 400, expose: true }); }
   return out;
 }
 
@@ -121,6 +121,6 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'פעולה לא מוכרת' });
   } catch (e) {
     console.error('users api error', e.status || 'network', String(e.message || '').replace(/sb_secret_\S+|eyJ\S+/g, '[redacted]').slice(0, 200));
-    return res.status(e.status && e.status < 500 ? e.status : 500).json({ error: e.status === 400 ? e.message : 'שגיאה בשרת הניהול. נסה שוב' });
+    return res.status(e.status && e.status < 500 ? e.status : 500).json({ error: e.expose ? e.message : 'שגיאה בשרת הניהול. נסה שוב' });
   }
 }
