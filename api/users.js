@@ -23,7 +23,8 @@ async function sb(path, { method = 'GET', body, headers = {} } = {}) {
 async function caller(req) {
   const auth = req.headers.authorization || '';
   if (!auth.startsWith('Bearer ')) return null;
-  const r = await fetch(`${URL_}/auth/v1/user`, { headers: { apikey: SECRET, Authorization: auth } });
+  let r;
+  try { r = await fetch(`${URL_}/auth/v1/user`, { headers: { apikey: SECRET, Authorization: auth } }); } catch (e) { console.error('auth check failed', e.message); throw e; }
   if (!r.ok) return null;
   const user = await r.json();
   const prof = await sb(`/rest/v1/profiles?id=eq.${user.id}&select=*`);
@@ -48,6 +49,19 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!URL_ || !SECRET) return res.status(500).json({ error: 'שרת הניהול לא הוגדר: חסרים משתני סביבה ב-Vercel' });
+  const body0 = typeof req.body === 'string' ? (() => { try { return JSON.parse(req.body || '{}'); } catch { return {}; } })() : (req.body || {});
+  if (body0.action === 'health') {
+    // בדיקת תצורה בטוחה: לא מחזירה ערכים סודיים, רק את צורתם ואת תוצאת החיבור
+    const out = {
+      url_ok: /^https:\/\/[a-z0-9]+\.supabase\.co$/.test(URL_),
+      url_shape: URL_.replace(/[a-z0-9]{6,}(?=\.supabase)/, '****').slice(0, 60),
+      key_type: SECRET.startsWith('sb_secret_') ? 'secret' : SECRET.startsWith('sb_publishable_') ? 'publishable (wrong key)' : SECRET.startsWith('eyJ') ? 'legacy jwt' : 'unknown',
+      key_has_whitespace: /\s/.test(SECRET),
+    };
+    try { const d = await sb('/rest/v1/divisions?select=id&limit=1'); out.db = Array.isArray(d) ? 'ok' : 'unexpected'; } catch (e) { out.db = `fail ${e.status || ''} ${String(e.message).slice(0, 80)}`; }
+    try { await sb('/auth/v1/admin/users?per_page=1'); out.auth_admin = 'ok'; } catch (e) { out.auth_admin = `fail ${e.status || ''} ${String(e.message).slice(0, 80)}`; }
+    return res.json(out);
+  }
   try {
     const me = await caller(req);
     if (!me) return res.status(401).json({ error: 'פג תוקף החיבור. יש להתחבר מחדש' });
@@ -106,7 +120,7 @@ export default async function handler(req, res) {
 
     return res.status(400).json({ error: 'פעולה לא מוכרת' });
   } catch (e) {
-    console.error('users api error', e.status, e.message);
+    console.error('users api error', e.status, e.message, e.stack);
     return res.status(e.status && e.status < 500 ? e.status : 500).json({ error: e.status === 400 ? e.message : 'שגיאה בשרת הניהול. נסה שוב' });
   }
 }
