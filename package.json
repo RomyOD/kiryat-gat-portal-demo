@@ -1,0 +1,16 @@
+{
+  "name": "kiryat-gat-portal-demo",
+  "private": true,
+  "type": "module",
+  "description": "פורטל תקציב ותוכניות עבודה - עיריית קרית גת (סביבת הדגמה)",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "jszip": "^3.10.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  }
+}
